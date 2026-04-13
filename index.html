@@ -131,7 +131,7 @@
 <body>
 
 <nav class="nav">
-  <div class="nav-brand" onclick="showPage('home')">HS 예측 리그</div>
+  <div class="nav-brand" onclick="brandClick()">HS 예측 리그</div>
   <div class="nav-right">
     <button class="nav-btn active" id="nav-home" onclick="showPage('home')">예측하기</button>
     <button class="nav-btn" id="nav-rank" onclick="showPage('rank')">랭킹</button>
@@ -247,6 +247,13 @@ const ADMIN_PW      = 'hs2026admin'
 
 const sb = supabase.createClient(SUPABASE_URL, SUPABASE_ANON)
 let currentWeek = null
+let brandClicks = 0, brandTimer;
+function brandClick() {
+  brandClicks++;
+  clearTimeout(brandTimer);
+  if (brandClicks >= 5) { brandClicks = 0; showPage('admin-login'); }
+  else { brandTimer = setTimeout(() => { brandClicks = 0; showPage('home'); }, 800); }
+} 
 let adminMode = false
 let pendingQs = []
 let currentTab = 'draft'
