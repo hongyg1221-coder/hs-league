@@ -1,0 +1,513 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>HS 예측 리그</title>
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+<style>
+  /* ── 여기 두 줄만 본인 Supabase 값으로 바꾸세요 ── */
+  /* SUPABASE_URL과 SUPABASE_ANON_KEY는 아래 script에서 설정 */
+
+  *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+  :root {
+    --bg: #ffffff; --bg2: #f7f6f3; --bg3: #efede8;
+    --text: #1a1a18; --text2: #6b6b65; --text3: #9b9b94;
+    --border: rgba(0,0,0,0.1); --border2: rgba(0,0,0,0.2);
+    --green: #1D9E75; --green-bg: #EAF3DE; --green-text: #27500A;
+    --red: #E24B4A; --red-bg: #FCEBEB; --red-text: #A32D2D;
+    --blue-bg: #E6F1FB; --blue-text: #0C447C;
+    --amber-bg: #FAEEDA; --amber-text: #633806;
+    --purple-bg: #EEEDFE; --purple-text: #3C3489;
+    --radius: 8px; --radius-lg: 12px;
+  }
+  body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif; background: var(--bg); color: var(--text); font-size: 15px; line-height: 1.6; }
+  a { color: inherit; text-decoration: none; }
+
+  /* NAV */
+  .nav { display: flex; align-items: center; justify-content: space-between; padding: 14px 20px; border-bottom: 0.5px solid var(--border); background: var(--bg); }
+  .nav-brand { font-size: 16px; font-weight: 600; cursor: pointer; }
+  .nav-right { display: flex; gap: 10px; align-items: center; }
+  .nav-btn { padding: 6px 14px; border-radius: 20px; border: 0.5px solid var(--border2); background: transparent; font-size: 13px; cursor: pointer; color: var(--text2); }
+  .nav-btn:hover { background: var(--bg2); }
+  .nav-btn.active { background: var(--text); color: var(--bg); border-color: transparent; }
+
+  /* LAYOUT */
+  .page { display: none; padding: 24px 20px; max-width: 680px; margin: 0 auto; }
+  .page.show { display: block; }
+
+  /* CARDS */
+  .card { background: var(--bg); border: 0.5px solid var(--border); border-radius: var(--radius-lg); padding: 16px 20px; margin-bottom: 12px; }
+  .card.voted-yes { border-color: var(--green); }
+  .card.voted-no { border-color: var(--red); }
+
+  /* BADGES */
+  .badge { display: inline-block; font-size: 11px; padding: 3px 9px; border-radius: 20px; font-weight: 500; }
+  .badge-금리 { background: var(--blue-bg); color: var(--blue-text); }
+  .badge-지정학 { background: var(--red-bg); color: var(--red-text); }
+  .badge-관세 { background: var(--amber-bg); color: var(--amber-text); }
+  .badge-국내 { background: var(--green-bg); color: var(--green-text); }
+  .badge-기업 { background: var(--purple-bg); color: var(--purple-text); }
+  .badge-new { background: var(--blue-bg); color: var(--blue-text); }
+
+  /* QUESTION CARD */
+  .q-meta { display: flex; align-items: center; gap: 8px; margin-bottom: 10px; flex-wrap: wrap; }
+  .q-src { font-size: 12px; color: var(--text3); }
+  .q-text { font-size: 16px; font-weight: 500; margin-bottom: 8px; line-height: 1.5; }
+  .q-criteria { font-size: 12px; color: var(--text2); margin-bottom: 14px; line-height: 1.6; }
+  .q-vote { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; margin-bottom: 10px; }
+  .vote-btn { padding: 10px; border-radius: var(--radius); border: 0.5px solid var(--border2); background: var(--bg2); cursor: pointer; text-align: center; font-size: 14px; font-weight: 500; transition: all 0.15s; }
+  .vote-btn:hover { opacity: 0.8; }
+  .vote-btn.yes { border-color: var(--green); background: var(--green-bg); color: var(--green-text); }
+  .vote-btn.no { border-color: var(--red); background: var(--red-bg); color: var(--red-text); }
+  .vote-btn:disabled { opacity: 0.5; cursor: not-allowed; }
+  .q-bar-row { display: flex; align-items: center; gap: 8px; }
+  .q-bar-wrap { flex: 1; height: 4px; background: var(--bg3); border-radius: 2px; overflow: hidden; }
+  .q-bar-fill { height: 100%; background: var(--green); border-radius: 2px; transition: width 0.4s; }
+  .q-bar-pcts { display: flex; justify-content: space-between; font-size: 12px; color: var(--text2); margin-top: 4px; }
+  .q-count { font-size: 11px; color: var(--text3); text-align: center; margin-top: 6px; }
+  .resolve-row { display: flex; justify-content: space-between; font-size: 11px; color: var(--text3); margin-top: 8px; padding-top: 8px; border-top: 0.5px solid var(--border); }
+
+  /* STAT GRID */
+  .stat-grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 8px; margin-bottom: 20px; }
+  .stat-box { background: var(--bg2); border-radius: var(--radius); padding: 12px; text-align: center; }
+  .stat-n { font-size: 22px; font-weight: 500; }
+  .stat-l { font-size: 11px; color: var(--text3); margin-top: 2px; }
+
+  /* WEEK FILTER */
+  .week-tabs { display: flex; gap: 6px; margin-bottom: 16px; flex-wrap: wrap; }
+  .tab { padding: 5px 14px; border-radius: 20px; border: 0.5px solid var(--border); background: transparent; font-size: 13px; cursor: pointer; color: var(--text2); }
+  .tab.active { background: var(--text); color: var(--bg); border-color: transparent; }
+
+  /* ADMIN */
+  .admin-row { display: flex; align-items: center; gap: 8px; margin-bottom: 8px; }
+  .admin-q { flex: 1; font-size: 14px; font-weight: 500; }
+  .admin-prob { font-size: 12px; color: var(--text3); }
+  .act { padding: 5px 12px; border-radius: var(--radius); border: 0.5px solid var(--border2); background: transparent; font-size: 12px; cursor: pointer; color: var(--text2); }
+  .act:hover { background: var(--bg2); }
+  .act-ok { border-color: var(--green); color: var(--green-text); }
+  .act-ok:hover { background: var(--green-bg); }
+  .act-del { border-color: var(--red); color: var(--red-text); }
+  .act-del:hover { background: var(--red-bg); }
+  .act-ok.done { background: var(--green-bg); }
+  .status-dot { width: 8px; height: 8px; border-radius: 50%; flex-shrink: 0; }
+  .dot-ok { background: var(--green); }
+  .dot-del { background: var(--red); }
+  .dot-wait { background: var(--bg3); border: 1px solid var(--border2); }
+
+  /* BUTTONS */
+  .btn { padding: 10px 20px; border-radius: var(--radius); border: 0.5px solid var(--border2); background: transparent; font-size: 14px; cursor: pointer; color: var(--text); transition: all 0.15s; }
+  .btn:hover { background: var(--bg2); }
+  .btn-primary { background: var(--text); color: var(--bg); border-color: transparent; }
+  .btn-primary:hover { opacity: 0.85; }
+  .btn-green { background: var(--green); color: #fff; border-color: transparent; }
+  .btn-green:hover { opacity: 0.85; }
+  .btn-green:disabled { background: var(--bg3); color: var(--text3); cursor: not-allowed; }
+  .pub-bar { display: flex; align-items: center; gap: 10px; margin-bottom: 16px; }
+  .pub-progress { flex: 1; height: 4px; background: var(--bg3); border-radius: 2px; overflow: hidden; }
+  .pub-fill { height: 100%; background: var(--green); border-radius: 2px; transition: width 0.4s; }
+
+  /* MISC */
+  .section-title { font-size: 18px; font-weight: 500; margin-bottom: 4px; }
+  .section-sub { font-size: 13px; color: var(--text2); margin-bottom: 20px; }
+  .divider { height: 0.5px; background: var(--border); margin: 20px 0; }
+  .empty { text-align: center; padding: 40px 20px; color: var(--text3); font-size: 14px; }
+  .toast { display: none; position: fixed; bottom: 24px; left: 50%; transform: translateX(-50%); background: var(--text); color: var(--bg); padding: 10px 20px; border-radius: 20px; font-size: 13px; z-index: 100; }
+  .toast.show { display: block; }
+  input[type=text], input[type=password], textarea { width: 100%; padding: 10px 12px; border: 0.5px solid var(--border2); border-radius: var(--radius); font-size: 14px; background: var(--bg); color: var(--text); font-family: inherit; outline: none; }
+  input:focus, textarea:focus { border-color: var(--text); }
+  label { font-size: 13px; color: var(--text2); display: block; margin-bottom: 6px; }
+  .form-group { margin-bottom: 16px; }
+  .loading { text-align: center; padding: 40px; color: var(--text3); }
+</style>
+</head>
+<body>
+
+<!-- NAV -->
+<nav class="nav">
+  <div class="nav-brand" onclick="showPage('home')">HS 예측 리그</div>
+  <div class="nav-right">
+    <button class="nav-btn active" id="nav-home" onclick="showPage('home')">예측하기</button>
+    <button class="nav-btn" id="nav-rank" onclick="showPage('rank')">랭킹</button>
+    <button class="nav-btn" id="nav-admin" onclick="showPage('admin-login')" style="display:none">관리자</button>
+  </div>
+</nav>
+
+<!-- 홈: 예측 질문 목록 -->
+<div class="page show" id="page-home">
+  <div class="section-title">이번 주 예측 질문</div>
+  <div class="section-sub" id="home-week-label">불러오는 중...</div>
+  <div class="week-tabs" id="weekTabs"></div>
+  <div id="questionList"><div class="loading">질문을 불러오는 중...</div></div>
+</div>
+
+<!-- 랭킹 -->
+<div class="page" id="page-rank">
+  <div class="section-title">예측 랭킹</div>
+  <div class="section-sub">적중률이 높을수록 HS 애널리스트에 가까워집니다</div>
+  <div class="stat-grid">
+    <div class="stat-box"><div class="stat-n" id="rank-total">-</div><div class="stat-l">전체 참여자</div></div>
+    <div class="stat-box"><div class="stat-n" id="rank-q">-</div><div class="stat-l">누적 질문</div></div>
+    <div class="stat-box"><div class="stat-n" id="rank-avg">-%</div><div class="stat-l">평균 적중률</div></div>
+  </div>
+  <div id="rankList"><div class="loading">랭킹을 불러오는 중...</div></div>
+</div>
+
+<!-- 관리자 로그인 -->
+<div class="page" id="page-admin-login">
+  <div class="section-title">관리자 로그인</div>
+  <div class="section-sub">편집자 전용 대시보드</div>
+  <div class="card" style="max-width:360px;">
+    <div class="form-group">
+      <label>비밀번호</label>
+      <input type="password" id="adminPw" placeholder="관리자 비밀번호 입력" onkeydown="if(event.key==='Enter')adminLogin()">
+    </div>
+    <button class="btn btn-primary" style="width:100%" onclick="adminLogin()">로그인</button>
+    <div id="loginError" style="color:var(--red);font-size:13px;margin-top:8px;display:none">비밀번호가 틀렸습니다.</div>
+  </div>
+</div>
+
+<!-- 관리자 대시보드 -->
+<div class="page" id="page-admin">
+  <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:4px;">
+    <div class="section-title">이번 주 질문 편집</div>
+    <button class="btn" onclick="adminLogout()" style="font-size:12px;padding:5px 12px;">로그아웃</button>
+  </div>
+  <div class="section-sub">승인 5개 이상이면 발행 가능합니다</div>
+
+  <div class="pub-bar">
+    <div class="pub-progress"><div class="pub-fill" id="adminPubBar" style="width:0%"></div></div>
+    <span id="adminPubCount" style="font-size:12px;color:var(--text2);white-space:nowrap">0 / 5</span>
+    <button class="btn btn-green" id="publishBtn" disabled onclick="publishWeek()">발행하기</button>
+  </div>
+
+  <div id="adminList"><div class="loading">불러오는 중...</div></div>
+
+  <div class="divider"></div>
+  <div class="section-title" style="font-size:16px;margin-bottom:12px;">질문 직접 추가</div>
+  <div class="card">
+    <div class="form-group">
+      <label>카테고리</label>
+      <select id="newCat" style="width:100%;padding:10px;border:0.5px solid var(--border2);border-radius:var(--radius);font-size:14px;background:var(--bg);color:var(--text);">
+        <option>금리</option><option>지정학</option><option>관세</option><option>국내</option><option>기업</option>
+      </select>
+    </div>
+    <div class="form-group">
+      <label>예측 질문</label>
+      <textarea id="newQ" rows="2" placeholder="예: 4월 FOMC 동결 이후 코스피는 2주 안에 1% 이상 반등할까?"></textarea>
+    </div>
+    <div class="form-group">
+      <label>판정 기준</label>
+      <textarea id="newCriteria" rows="2" placeholder="예: FOMC 결과 +14일 코스피 종가 1% 이상 상승 시 YES"></textarea>
+    </div>
+    <div class="form-group">
+      <label>판정일 (YYYY-MM-DD)</label>
+      <input type="text" id="newDate" placeholder="2026-05-15">
+    </div>
+    <button class="btn btn-primary" onclick="addQuestion()">질문 추가</button>
+  </div>
+</div>
+
+<div class="toast" id="toast"></div>
+
+<script>
+// ═══════════════════════════════════════════
+//  ⚙️  여기만 본인 값으로 바꾸세요 (2줄)
+// ═══════════════════════════════════════════
+const SUPABASE_URL  = 'https://owggdrweydbqhntflhuj.supabase.co'
+const SUPABASE_ANON = 'sb_publishable_J7mpZD4eO4keZa8dYdIGGg_48XBF6ue'
+const ADMIN_PW      = 'hs2026admin'   // 관리자 비밀번호 (원하는 걸로 바꾸세요)
+// ═══════════════════════════════════════════
+
+const sb = supabase.createClient(SUPABASE_URL, SUPABASE_ANON)
+let currentWeek = null
+let adminMode = false
+let pendingQuestions = []
+
+// ── 페이지 라우팅 ──
+function showPage(name) {
+  document.querySelectorAll('.page').forEach(p => p.classList.remove('show'))
+  document.querySelectorAll('.nav-btn').forEach(b => b.classList.remove('active'))
+  document.getElementById('page-' + name)?.classList.add('show')
+  document.getElementById('nav-' + name.split('-')[0])?.classList.add('active')
+  if (name === 'home') loadQuestions()
+  if (name === 'rank') loadRanking()
+  if (name === 'admin') loadAdminQuestions()
+}
+
+// ── 토스트 메시지 ──
+function toast(msg, ms = 2200) {
+  const el = document.getElementById('toast')
+  el.textContent = msg
+  el.classList.add('show')
+  setTimeout(() => el.classList.remove('show'), ms)
+}
+
+// ── 투표 기록 (localStorage) ──
+function getVoted(qId) { return localStorage.getItem('vote_' + qId) }
+function setVoted(qId, choice) { localStorage.setItem('vote_' + qId, choice) }
+
+// ══════════════════════════
+//  홈: 질문 목록
+// ══════════════════════════
+async function loadQuestions() {
+  const listEl = document.getElementById('questionList')
+  listEl.innerHTML = '<div class="loading">불러오는 중...</div>'
+
+  const { data: batches } = await sb.from('weekly_batches').select('*').eq('status', 'published').order('created_at', { ascending: false }).limit(4)
+  if (!batches?.length) { listEl.innerHTML = '<div class="empty">아직 등록된 질문이 없습니다</div>'; return }
+
+  if (!currentWeek) currentWeek = batches[0].id
+
+  // 주차 탭
+  const tabsEl = document.getElementById('weekTabs')
+  tabsEl.innerHTML = batches.map((b, i) =>
+    `<button class="tab${b.id === currentWeek ? ' active' : ''}" onclick="selectWeek('${b.id}', this)">${i === 0 ? '이번 주' : b.week_label}</button>`
+  ).join('')
+
+  const batch = batches.find(b => b.id === currentWeek) || batches[0]
+  document.getElementById('home-week-label').textContent = batch.week_date + ' · ' + batch.week_label
+
+  const { data: qs } = await sb.from('questions').select('*').eq('batch_id', currentWeek).eq('status', 'live').order('created_at')
+  if (!qs?.length) { listEl.innerHTML = '<div class="empty">이번 주 질문을 준비 중입니다</div>'; return }
+
+  listEl.innerHTML = qs.map(q => renderQuestion(q)).join('')
+}
+
+function selectWeek(id, btn) {
+  currentWeek = id
+  document.querySelectorAll('.tab').forEach(t => t.classList.remove('active'))
+  btn.classList.add('active')
+  loadQuestions()
+}
+
+function renderQuestion(q) {
+  const total = (q.yes_count || 0) + (q.no_count || 0)
+  const yesPct = total > 0 ? Math.round(q.yes_count / total * 100) : 50
+  const noPct = 100 - yesPct
+  const voted = getVoted(q.id)
+  const cardClass = voted === 'YES' ? 'card voted-yes' : voted === 'NO' ? 'card voted-no' : 'card'
+  const yesDisabled = voted ? 'disabled' : ''
+  const noDisabled  = voted ? 'disabled' : ''
+  const yesBtnClass = voted === 'YES' ? 'vote-btn yes' : 'vote-btn'
+  const noBtnClass  = voted === 'NO'  ? 'vote-btn no'  : 'vote-btn'
+  const resolveLabel = q.resolve_date ? '판정일 ' + q.resolve_date : ''
+
+  return `<div class="${cardClass}" id="q-${q.id}">
+    <div class="q-meta">
+      <span class="badge badge-${q.category}">${q.category}</span>
+      ${q.polymarket_src ? `<span class="q-src">${q.polymarket_src} · ${q.polymarket_prob || ''}</span>` : ''}
+    </div>
+    <div class="q-text">${q.question_text}</div>
+    <div class="q-criteria">${q.criteria}</div>
+    <div class="q-vote">
+      <button class="${yesBtnClass}" ${yesDisabled} onclick="vote('${q.id}', 'YES')">YES · 바뀐다</button>
+      <button class="${noBtnClass}"  ${noDisabled}  onclick="vote('${q.id}', 'NO')">NO · 그대로다</button>
+    </div>
+    <div class="q-bar-wrap"><div class="q-bar-fill" style="width:${yesPct}%"></div></div>
+    <div class="q-bar-pcts"><span style="color:var(--green-text)">YES ${yesPct}%</span><span style="color:var(--red-text)">NO ${noPct}%</span></div>
+    <div class="q-count">${total}명 참여 중</div>
+    <div class="resolve-row"><span>${resolveLabel}</span><span>${q.points || 50}포인트</span></div>
+  </div>`
+}
+
+async function vote(qId, choice) {
+  if (getVoted(qId)) return
+  setVoted(qId, choice)
+
+  const field = choice === 'YES' ? 'yes_count' : 'no_count'
+  const { data: q } = await sb.from('questions').select('yes_count, no_count').eq('id', qId).single()
+  const newVal = (q[field] || 0) + 1
+  await sb.from('questions').update({ [field]: newVal }).eq('id', qId)
+
+  toast(choice === 'YES' ? '✓ YES로 예측했습니다' : '✓ NO로 예측했습니다')
+
+  const { data: updated } = await sb.from('questions').select('*').eq('id', qId).single()
+  const el = document.getElementById('q-' + qId)
+  if (el) el.outerHTML = renderQuestion(updated)
+}
+
+// ══════════════════════════
+//  랭킹 (MVP: 참여자 수 기반)
+// ══════════════════════════
+async function loadRanking() {
+  const { count: totalPredictions } = await sb.from('predictions').select('*', { count: 'exact', head: true })
+  const { count: totalQuestions }   = await sb.from('questions').select('*', { count: 'exact', head: true }).eq('status', 'live')
+
+  document.getElementById('rank-total').textContent = totalPredictions || '-'
+  document.getElementById('rank-q').textContent = totalQuestions || '-'
+  document.getElementById('rank-avg').textContent = '집계 중'
+
+  document.getElementById('rankList').innerHTML = `
+    <div class="card" style="text-align:center;padding:32px 20px;">
+      <div style="font-size:14px;color:var(--text2);line-height:1.8;">
+        개인 랭킹은 판정 완료된 질문이 쌓이면 공개됩니다.<br>
+        첫 번째 판정일 이후 적중률 순위가 나타납니다.
+      </div>
+    </div>`
+}
+
+// ══════════════════════════
+//  관리자
+// ══════════════════════════
+function adminLogin() {
+  const pw = document.getElementById('adminPw').value
+  if (pw === ADMIN_PW) {
+    adminMode = true
+    document.getElementById('loginError').style.display = 'none'
+    document.getElementById('nav-admin').style.display = 'block'
+    showPage('admin')
+  } else {
+    document.getElementById('loginError').style.display = 'block'
+  }
+}
+
+function adminLogout() {
+  adminMode = false
+  document.getElementById('nav-admin').style.display = 'none'
+  showPage('home')
+}
+
+async function loadAdminQuestions() {
+  if (!adminMode) { showPage('admin-login'); return }
+  const listEl = document.getElementById('adminList')
+  listEl.innerHTML = '<div class="loading">불러오는 중...</div>'
+
+  const { data: batches } = await sb.from('weekly_batches').select('*').eq('status', 'draft').order('created_at', { ascending: false }).limit(1)
+
+  if (!batches?.length) {
+    listEl.innerHTML = '<div class="empty">대기 중인 배치가 없습니다<br><br>아래에서 직접 질문을 추가하거나<br>AI 생성을 기다려주세요</div>'
+    updateAdminPubBar([])
+    return
+  }
+
+  const batch = batches[0]
+  const { data: qs } = await sb.from('questions').select('*').eq('batch_id', batch.id).order('created_at')
+  pendingQuestions = qs || []
+
+  listEl.innerHTML = (qs || []).map(q => `
+    <div class="card" id="aq-${q.id}" style="${q.status === 'approved' ? 'border-color:var(--green)' : q.status === 'rejected' ? 'opacity:0.4' : ''}">
+      <div class="admin-row">
+        <div class="status-dot ${q.status === 'approved' ? 'dot-ok' : q.status === 'rejected' ? 'dot-del' : 'dot-wait'}"></div>
+        <span class="badge badge-${q.category}">${q.category}</span>
+        <div class="admin-q">${q.question_text}</div>
+      </div>
+      <div style="font-size:12px;color:var(--text3);margin:4px 0 10px 16px;">${q.criteria}</div>
+      <div style="display:flex;gap:8px;justify-content:flex-end;">
+        <button class="act act-ok${q.status === 'approved' ? ' done' : ''}" onclick="adminApprove('${q.id}', '${batch.id}')">
+          ${q.status === 'approved' ? '승인됨 ✓' : '승인'}
+        </button>
+        <button class="act act-del" onclick="adminReject('${q.id}')">반려</button>
+      </div>
+    </div>`).join('')
+
+  updateAdminPubBar(qs || [])
+}
+
+async function adminApprove(qId, batchId) {
+  const q = pendingQuestions.find(x => x.id === qId)
+  const newStatus = q?.status === 'approved' ? 'pending' : 'approved'
+  await sb.from('questions').update({ status: newStatus }).eq('id', qId)
+  if (q) q.status = newStatus
+  updateAdminPubBar(pendingQuestions)
+  const card = document.getElementById('aq-' + qId)
+  if (card) {
+    const dot = card.querySelector('.status-dot')
+    const btn = card.querySelector('.act-ok')
+    if (newStatus === 'approved') {
+      card.style.borderColor = 'var(--green)'
+      card.style.opacity = '1'
+      dot.className = 'status-dot dot-ok'
+      btn.textContent = '승인됨 ✓'
+      btn.classList.add('done')
+    } else {
+      card.style.borderColor = ''
+      dot.className = 'status-dot dot-wait'
+      btn.textContent = '승인'
+      btn.classList.remove('done')
+    }
+  }
+  toast(newStatus === 'approved' ? '승인했습니다' : '승인을 취소했습니다')
+}
+
+async function adminReject(qId) {
+  await sb.from('questions').update({ status: 'rejected' }).eq('id', qId)
+  const q = pendingQuestions.find(x => x.id === qId)
+  if (q) q.status = 'rejected'
+  updateAdminPubBar(pendingQuestions)
+  const card = document.getElementById('aq-' + qId)
+  if (card) { card.style.opacity = '0.4'; card.querySelector('.status-dot').className = 'status-dot dot-del' }
+  toast('반려했습니다')
+}
+
+function updateAdminPubBar(qs) {
+  const approved = qs.filter(q => q.status === 'approved').length
+  const pct = Math.min(100, Math.round(approved / 5 * 100))
+  document.getElementById('adminPubBar').style.width = pct + '%'
+  document.getElementById('adminPubCount').textContent = approved + ' / 5'
+  const btn = document.getElementById('publishBtn')
+  btn.disabled = approved < 5
+}
+
+async function publishWeek() {
+  const approved = pendingQuestions.filter(q => q.status === 'approved')
+  if (approved.length < 5) { toast('승인된 질문이 5개 미만입니다'); return }
+
+  const { data: batches } = await sb.from('weekly_batches').select('*').eq('status', 'draft').order('created_at', { ascending: false }).limit(1)
+  if (!batches?.length) return
+
+  await sb.from('weekly_batches').update({ status: 'published', published_at: new Date().toISOString() }).eq('id', batches[0].id)
+  await sb.from('questions').update({ status: 'live', published_at: new Date().toISOString() }).in('id', approved.map(q => q.id))
+
+  toast('🎉 이번 주 질문이 발행됐습니다!')
+  setTimeout(() => showPage('home'), 1500)
+}
+
+async function addQuestion() {
+  if (!adminMode) return
+  const cat      = document.getElementById('newCat').value
+  const qText    = document.getElementById('newQ').value.trim()
+  const criteria = document.getElementById('newCriteria').value.trim()
+  const date     = document.getElementById('newDate').value.trim()
+
+  if (!qText || !criteria || !date) { toast('질문, 판정기준, 날짜를 모두 입력해주세요'); return }
+
+  // draft 배치 없으면 새로 생성
+  let { data: batches } = await sb.from('weekly_batches').select('*').eq('status', 'draft').order('created_at', { ascending: false }).limit(1)
+  let batchId
+  if (!batches?.length) {
+    const now = new Date()
+    const { data: nb } = await sb.from('weekly_batches').insert({ week_label: getWeekLabel(), week_date: getWeekDate(), status: 'draft' }).select().single()
+    batchId = nb.id
+  } else {
+    batchId = batches[0].id
+  }
+
+  const { error } = await sb.from('questions').insert({ batch_id: batchId, category: cat, question_text: qText, criteria, resolve_date: date, status: 'pending', points: 50 })
+  if (error) { toast('오류: ' + error.message); return }
+
+  document.getElementById('newQ').value = ''
+  document.getElementById('newCriteria').value = ''
+  document.getElementById('newDate').value = ''
+  toast('질문이 추가됐습니다')
+  loadAdminQuestions()
+}
+
+function getWeekLabel() {
+  const now = new Date(); const year = now.getFullYear()
+  const week = Math.ceil(((now - new Date(year, 0, 1)) / 86400000 + 1) / 7)
+  return `${year}-W${String(week).padStart(2, '0')}`
+}
+function getWeekDate() {
+  const now = new Date(); const mon = new Date(now)
+  mon.setDate(now.getDate() - now.getDay() + 1)
+  const sun = new Date(mon); sun.setDate(mon.getDate() + 6)
+  const fmt = d => `${d.getMonth() + 1}월 ${d.getDate()}일`
+  return `${fmt(mon)} – ${fmt(sun)}`
+}
+
+// 초기 로드
+loadQuestions()
+</script>
+</body>
+</html>
